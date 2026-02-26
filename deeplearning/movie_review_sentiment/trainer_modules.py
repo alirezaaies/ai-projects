@@ -12,7 +12,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-def train_epoch(model, loader, optimizer, criterion, device):
+def train_epoch(model, loader, optimizer, loss_fn, device):
     model.train()
     total_loss = 0
     correct = 0
@@ -25,11 +25,11 @@ def train_epoch(model, loader, optimizer, criterion, device):
         
         optimizer.zero_grad()
         logits = model(indices)
-        loss = criterion(logits, labels.unsqueeze(dim=1))
+        loss = loss_fn(logits, labels.unsqueeze(dim=1))
         
         loss.backward()
+        # Optional but better to use gradient clipping for RNNs to prevent exploding gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        # Optional: torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         
         total_loss += loss.item()
@@ -40,7 +40,7 @@ def train_epoch(model, loader, optimizer, criterion, device):
     return total_loss / len(loader), correct / total
 
 
-def evaluate(model, loader, criterion, device):
+def evaluate(model, loader, loss_fn, device):
     model.eval()
     total_loss = 0
     correct = 0
@@ -53,7 +53,7 @@ def evaluate(model, loader, criterion, device):
             # lengths = batch['lengths']
             
             logits = model(indices)
-            loss = criterion(logits, labels.unsqueeze(dim=1))
+            loss = loss_fn(logits, labels.unsqueeze(dim=1))
             
             total_loss += loss.item()
             preds = (torch.sigmoid(logits) > 0.5).float()

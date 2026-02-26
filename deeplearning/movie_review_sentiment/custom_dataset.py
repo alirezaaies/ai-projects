@@ -23,7 +23,7 @@ LOAD_DATA_PATH_GZ = os.path.join(DATA_DIR, FILE_NAME_GZ)
 def load_data_as_df(source="LOCAL", test_size=0.2, random_state=42):
     """
     Load dataset from LOCAL files or Hugging Face.
-    Returns: train_df, test_df
+    Returns: train_df, test_df (as dataframe)
     """
 
     if source == "LOCAL":
@@ -78,7 +78,8 @@ def load_data_as_df(source="LOCAL", test_size=0.2, random_state=42):
 def load_data(source="LOCAL", test_size=0.2, random_state=42):
     """
     Load dataset from LOCAL files or Hugging Face.
-    Always returns a DatasetDict with 'train' and 'test'
+    returns a DatasetDict with 'train' and 'test' and 'validation' splits if source is LOCAL
+    returns a Dataset with 'train' and 'test' splits if source is HUG
     and columns: ['text', 'label'].
     """
 
@@ -137,52 +138,8 @@ def load_data(source="LOCAL", test_size=0.2, random_state=42):
     else:
         raise ValueError("source must be either 'LOCAL' or 'HUG'")
     
-    
-class TextClassificationDataset_wasted_time(Dataset):
-    def __init__(self, dataset_text, dataset_label, vocab, max_len=200):
-        """
-        dataset: Hugging Face Dataset format (train or test split)
-        vocab: dictionary mapping word -> index
-        max_len: max sequence length
-        """
-        self.dataset_text = dataset_text
-        self.dataset_label = dataset_label
-        self.vocab = vocab
-        self.max_len = max_len
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        item = self.dataset[idx]
-        text = item['text']  # or 'review' depending on your column
-        label = item['label']  # or 'sentiment'
-
-        # tokenize to numbers
-        # indices = [my_tokenizer_number(t, self.vocab, max_len=self.max_len) for t in item["text"]]
-        indices = my_tokenizer_number(text, self.vocab, self.max_len)
-
-        # convert to tensor
-        x = torch.tensor(indices, dtype=torch.long)
-        y = torch.tensor(label, dtype=torch.long)
-        num_of_token = len(x)
-
-        # optionally pad if shorter than max_len
-        if len(x) < self.max_len:
-            pad_len = self.max_len - len(x)
-            pad_idx = self.vocab['<pad>']
-            x = torch.cat([x, torch.full((pad_len,), pad_idx, dtype=torch.long)])
-
-        data = {
-            'tokenized_text': x,
-            'label': y.float(),
-            'num_of_token': num_of_token
-        }
-        # return x, y.float(), length_of_token
-        return data
-    
 # new and performance improved
-class TextClassificationDataset(Dataset):
+class CustomDataset(Dataset):
     def __init__(self, dataset_text_indices, dataset_label, vocab, max_len=200):
         """
         dataset: Hugging Face Dataset format (train or test split)
@@ -235,24 +192,8 @@ class TextClassificationDataset(Dataset):
             'y': y
             # 'num_of_token': num_of_token
         }
-        # return x, y.float(), length_of_token
+
         return data
-
-# Collate function
-# def collate_fn(batch):
-#     x = [item['x'] for item in batch]
-#     y = [item['y'] for item in batch]
-#     num_of_token = [item['num_of_token'] for item in batch]
-
-#     indices_padded = torch.nn.utils.rnn.pad_sequence(
-#         x, batch_first=True, padding_value=0  # Assuming <pad> = 0
-#     )
-
-#     return {
-#         'x': indices_padded,
-#         'y': torch.tensor(y, dtype=torch.float32),
-#         'num_of_token': torch.tensor(num_of_token, dtype=torch.long),
-#     }
     
 def collate_fn(batch):
     x = [item['x'] for item in batch]
@@ -272,10 +213,10 @@ def collate_fn(batch):
 
 def build_vocab(dataset, text_column='text', vocab_size=25000, min_freq=2, specials=['<pad>', '<unk>']):
     """
-    Build a vocabulary dictionary from a Hugging Face dataset.
+    Build a vocabulary dictionary from a dataset.
     
     Args:
-        dataset: Hugging Face Dataset (e.g., dataset['train'])
+        dataset: Dataset (e.g., dataset['train'])
         text_column (str): Name of the text column in the dataset
         vocab_size (int): Maximum number of words to include in vocab (including specials)
         min_freq (int): Minimum frequency for a word to be included
